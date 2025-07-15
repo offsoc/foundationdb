@@ -53,6 +53,15 @@ jobs:
           cmake -DCMAKE_PREFIX_PATH=/usr/local -DBOOST_ROOT=/usr/local -DBoost_NO_SYSTEM_PATHS=ON ..
           make -j$(nproc) VERBOSE=1
           cd ..
+      - name: Print CMake and build logs if build fails
+        if: failure()
+        run: |
+          echo "==== CMakeError.log ===="
+          cat build/CMakeFiles/CMakeError.log || true
+          echo "==== CMakeOutput.log ===="
+          cat build/CMakeFiles/CMakeOutput.log || true
+          echo "==== All *.log files in build (last 100 lines each) ===="
+          for f in $(find build -name '*.log'); do echo "==== $f ===="; tail -n 100 "$f" || true; done
       - name: Prepare bin and lib for packaging
         run: |
           mkdir -p bin lib
@@ -112,6 +121,15 @@ jobs:
           cmake -DCMAKE_PREFIX_PATH=/usr/local -DBOOST_ROOT=/usr/local -DBoost_NO_SYSTEM_PATHS=ON ..
           make -j$(nproc) VERBOSE=1
           cd ..
+      - name: Print CMake and build logs if build fails
+        if: failure()
+        run: |
+          echo "==== CMakeError.log ===="
+          cat build/CMakeFiles/CMakeError.log || true
+          echo "==== CMakeOutput.log ===="
+          cat build/CMakeFiles/CMakeOutput.log || true
+          echo "==== All *.log files in build (last 100 lines each) ===="
+          for f in $(find build -name '*.log'); do echo "==== $f ===="; tail -n 100 "$f" || true; done
       - name: Prepare bin and lib for packaging
         run: |
           mkdir -p bin lib
