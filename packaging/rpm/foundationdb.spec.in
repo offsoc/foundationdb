@@ -20,12 +20,23 @@ Vendor: FoundationDB
 FoundationDB is a scalable, fault-tolerant, ordered key-value store
 with full ACID transactions.
 
+# Fedora 41/42 依赖
+%if 0%{?fedora} >= 41
+BuildRequires: openssl-devel >= 3.0
+Requires: python3
+Requires: systemd
+Requires: libatomic
+%endif
 # RHEL9/10依赖区分
 %if 0%{?rhel} == 9
 BuildRequires: openssl-devel >= 1.1
+Requires: python3
+Requires: systemd
 %endif
 %if 0%{?rhel} == 10
 BuildRequires: openssl-devel >= 3.0
+Requires: python3
+Requires: systemd
 %endif
 
 %package server
@@ -127,22 +138,24 @@ exit 0
 %config(noreplace) /etc/foundationdb/foundationdb.conf
 %attr(0700,foundationdb,foundationdb) /var/lib/foundationdb
 %attr(0700,foundationdb,foundationdb) /var/log/foundationdb
-# RPM init scripts should not be marked config (according to http://fedoraproject.org/wiki/Packaging:SysVInitScript#Initscript_packaging)
 /lib/systemd/system/foundationdb.service
 /usr/sbin/*
-/usr/lib/foundationdb/fdbmonitor
-/usr/lib/foundationdb/make_public.py
+/usr/lib%{?_isa}/foundationdb/fdbmonitor
+/usr/lib%{?_isa}/foundationdb/make_public.py
 
 %files clients
 %defattr(-,root,root)
 %doc /usr/share/doc/foundationdb-clients
 %attr(0775,foundationdb,foundationdb) %dir /etc/foundationdb
-%dir /usr/lib/foundationdb
-/usr/lib/foundationdb/backup_agent/backup_agent
+%dir /usr/lib%{?_isa}/foundationdb
+/usr/lib%{?_isa}/foundationdb/backup_agent/backup_agent
 /usr/bin/dr_agent
 /usr/bin/fdbcli
 /usr/bin/fdbdr
 /usr/bin/fdbbackup
 /usr/bin/fdbrestore
-/usr/lib64/libfdb_c.so
+/usr/lib%{?_isa}/libfdb_c.so
 /usr/include/*
+
+%changelog
+# Changelog placeholder
