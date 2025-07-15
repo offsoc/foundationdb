@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
-  # 自动发布到 Release
   release:
     types: [published]
 
@@ -39,7 +38,7 @@ jobs:
           tar -xjf jemalloc-5.3.0.tar.bz2
           cd jemalloc-5.3.0
           ./configure --prefix=/usr/local
-          make -j$(nproc)
+          make -j$(nproc) VERBOSE=1
           sudo make install
           cd ..
           sudo ldconfig
@@ -52,7 +51,7 @@ jobs:
           mkdir -p build
           cd build
           cmake -DCMAKE_PREFIX_PATH=/usr/local -DBOOST_ROOT=/usr/local -DBoost_NO_SYSTEM_PATHS=ON ..
-          make -j$(nproc)
+          make -j$(nproc) VERBOSE=1
           cd ..
       - name: Prepare bin and lib for packaging
         run: |
@@ -98,7 +97,7 @@ jobs:
           tar -xjf jemalloc-5.3.0.tar.bz2
           cd jemalloc-5.3.0
           ./configure --prefix=/usr/local
-          make -j$(nproc)
+          make -j$(nproc) VERBOSE=1
           sudo make install
           cd ..
           sudo ldconfig
@@ -111,7 +110,7 @@ jobs:
           mkdir -p build
           cd build
           cmake -DCMAKE_PREFIX_PATH=/usr/local -DBOOST_ROOT=/usr/local -DBoost_NO_SYSTEM_PATHS=ON ..
-          make -j$(nproc)
+          make -j$(nproc) VERBOSE=1
           cd ..
       - name: Prepare bin and lib for packaging
         run: |
@@ -128,173 +127,3 @@ jobs:
         with:
           name: rpm-${{ matrix.elver }}-${{ matrix.arch }}
           path: packages/*.rpm
-
-  # 2. DEB 构建
-  build-deb:
-    name: Build DEBs
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        distro: [ubuntu20.04, ubuntu22.04, ubuntu24.04, debian10, debian11, debian12]
-        arch: [amd64, arm64]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y dpkg-dev fakeroot dos2unix gcc g++ make cmake python3 python3-pip
-      - name: Install Mono
-        run: |
-          sudo apt-get install -y mono-complete || sudo dnf install -y mono-complete || true
-      - name: Build and install jemalloc 5.3.0
-        run: |
-          wget https://github.com/jemalloc/jemalloc/releases/download/5.3.0/jemalloc-5.3.0.tar.bz2
-          tar -xjf jemalloc-5.3.0.tar.bz2
-          cd jemalloc-5.3.0
-          ./configure --prefix=/usr/local
-          make -j$(nproc)
-          sudo make install
-          cd ..
-          sudo ldconfig
-      - name: Set jemalloc_ROOT for CMake
-        run: echo "jemalloc_ROOT=/usr/local" >> $GITHUB_ENV
-      - name: Clean build directory
-        run: rm -rf build
-      - name: Build FoundationDB binaries
-        run: |
-          mkdir -p build
-          cd build
-          cmake -DCMAKE_PREFIX_PATH=/usr/local -DBOOST_ROOT=/usr/local -DBoost_NO_SYSTEM_PATHS=ON ..
-          make -j$(nproc)
-          cd ..
-      - name: Prepare bin and lib for packaging
-        run: |
-          mkdir -p bin lib
-          cp build/bin/* bin/ || true
-          cp build/lib/* lib/ || true
-          mkdir -p bindings/c/foundationdb
-          cp build/bindings/c/foundationdb/*.h bindings/c/foundationdb/ || true
-      - name: Build DEBs
-        run: |
-          mkdir -p packages
-          ./packaging/deb/builddebs.sh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: deb-${{ matrix.distro }}-${{ matrix.arch }}
-          path: packages/*.deb
-
-  # 3. Docker 镜像
-  build-docker:
-    name: Build Docker Images
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        arch: [amd64, arm64]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-      - name: Build Docker images
-        run: |
-          docker buildx build --platform linux/${{ matrix.arch }} -t foundationdb/foundationdb:${GITHUB_SHA}-${{ matrix.arch }} --load -f packaging/docker/Dockerfile .
-      - name: Save Docker image as artifact
-        run: |
-          docker save foundationdb/foundationdb:${GITHUB_SHA}-${{ matrix.arch }} | gzip > foundationdb-docker-${{ matrix.arch }}.tar.gz
-      - uses: actions/upload-artifact@v4
-        with:
-          name: docker-${{ matrix.arch }}
-          path: foundationdb-docker-${{ matrix.arch }}.tar.gz
-
-  # 4. macOS PKG 构建
-  build-macos:
-    name: Build macOS PKG
-    strategy:
-      matrix:
-        include:
-          - runner: macos-latest
-            arch: amd64
-          - runner: macos-14
-            arch: arm64
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install build dependencies
-        run: |
-          brew install cmake
-      - name: Clean build directory
-        run: rm -rf build
-      - name: Build FoundationDB binaries
-        run: |
-          mkdir -p build
-          cd build
-          cmake ..
-          make -j$(sysctl -n hw.logicalcpu)
-          cd ..
-      - name: Build macOS PKG
-        run: |
-          cd packaging/osx
-          ../../packaging/osx/buildpkg.sh ../../build ../..
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-pkg-${{ matrix.arch }}
-          path: packaging/osx/*.pkg
-
-  # 5. Windows MSI 构建
-  build-windows:
-    name: Build Windows MSI
-    strategy:
-      matrix:
-        include:
-          - runner: windows-latest
-            arch: amd64
-          # Windows arm64 runner 目前为预览/有限制，如可用则启用
-          - runner: windows-2022-arm64
-            arch: arm64
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install WiX Toolset
-        run: |
-          choco install wixtoolset -y
-      - name: Add WiX to PATH
-        run: |
-          echo "C:\\Program Files (x86)\\WiX Toolset v3.11\\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-      - name: Clean build directory
-        run: |
-          if (Test-Path build) { Remove-Item -Recurse -Force build }
-        shell: pwsh
-      - name: Build FoundationDB binaries
-        run: |
-          mkdir -p build
-          cd build
-          cmake ..
-          cmake --build . --config Release
-          cd ..
-      - name: Build Windows MSI
-        run: |
-          cd packaging/msi
-          cmake -DWIX_DIR="C:/Program Files (x86)/WiX Toolset v3.11" .
-          "C:/Program Files (x86)/Microsoft Visual Studio/2019/BuildTools/MSBuild/Current/Bin/MSBuild.exe" MSIInstaller.wixproj /p:Configuration=Release || msbuild MSIInstaller.wixproj /p:Configuration=Release
-        shell: pwsh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-msi-${{ matrix.arch }}
-          path: packaging/msi/*.msi
-
-  # 6. 自动发布到 Release
-  release:
-    name: Publish Release Artifacts
-    needs: [build-rpm, build-deb, build-docker, build-macos, build-windows]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release'
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ./artifacts
-      - name: Publish to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ./artifacts/**/*.{rpm,deb,tar.gz,pkg,msi}
