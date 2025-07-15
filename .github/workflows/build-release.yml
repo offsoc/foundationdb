@@ -30,6 +30,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y rpm m4 dos2unix fakeroot gcc g++ make cmake python3 python3-pip
+      - name: Clean build directory
+        run: rm -rf build
       - name: Build FoundationDB binaries
         run: |
           mkdir -p build
@@ -69,6 +71,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y dpkg-dev fakeroot dos2unix gcc g++ make cmake python3 python3-pip
+      - name: Clean build directory
+        run: rm -rf build
       - name: Build FoundationDB binaries
         run: |
           mkdir -p build
@@ -117,38 +121,75 @@ jobs:
   # 4. macOS PKG 构建
   build-macos:
     name: Build macOS PKG
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: amd64
+          - runner: macos-14
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - name: Install build dependencies
         run: |
           brew install cmake
+      - name: Clean build directory
+        run: rm -rf build
+      - name: Build FoundationDB binaries
+        run: |
+          mkdir -p build
+          cd build
+          cmake ..
+          make -j$(sysctl -n hw.logicalcpu)
+          cd ..
       - name: Build macOS PKG
         run: |
           cd packaging/osx
-          ./buildpkg.sh
+          ../../packaging/osx/buildpkg.sh ../../build ../..
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-pkg
+          name: macos-pkg-${{ matrix.arch }}
           path: packaging/osx/*.pkg
 
   # 5. Windows MSI 构建
   build-windows:
     name: Build Windows MSI
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: amd64
+          # Windows arm64 runner 目前为预览/有限制，如可用则启用
+          - runner: windows-2022-arm64
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install build dependencies
+      - name: Install WiX Toolset
         run: |
-          choco install cmake wixtoolset
-      - name: Build MSI
+          choco install wixtoolset -y
+      - name: Add WiX to PATH
+        run: |
+          echo "C:\\Program Files (x86)\\WiX Toolset v3.11\\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Clean build directory
+        run: rm -rf build
+      - name: Build FoundationDB binaries
+        run: |
+          mkdir -p build
+          cd build
+          cmake ..
+          cmake --build . --config Release
+          cd ..
+      - name: Build Windows MSI
         run: |
           cd packaging/msi
-          cmake -G "Visual Studio 17 2022" .
-          msbuild MSIInstaller.wixproj /p:Configuration=Release
+          cmake -DWIX_DIR="C:/Program Files (x86)/WiX Toolset v3.11" .
+          "C:/Program Files (x86)/Microsoft Visual Studio/2019/BuildTools/MSBuild/Current/Bin/MSBuild.exe" MSIInstaller.wixproj /p:Configuration=Release || msbuild MSIInstaller.wixproj /p:Configuration=Release
+        shell: pwsh
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-msi
+          name: windows-msi-${{ matrix.arch }}
           path: packaging/msi/*.msi
 
   # 6. 自动发布到 Release

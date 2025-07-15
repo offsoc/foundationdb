@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 3.15)
+project(FoundationDBInstaller)
 find_package(WIX)
 
 if(WIX_FOUND)

@@ -236,10 +236,10 @@ RUN mkdir -p /var/log/fdb-trace-logs && \
     chmod +x /usr/local/bin/run_ycsb_standalone.sh
 
 
-COPY YCSB /YCSB
-WORKDIR /YCSB
-ENV FDB_NETWORK_OPTION_EXTERNAL_CLIENT_DIRECTORY=/var/dynamic-conf/lib/multiversion/
-ENV FDB_NETWORK_OPTION_TRACE_ENABLE=/var/log/fdb-trace-logs
-ENV LD_LIBRARY_PATH=/var/dynamic-conf/lib/
-ENV BUCKET=""
-ENTRYPOINT ["run_ycsb.sh"]
+# COPY YCSB /YCSB
+# WORKDIR /YCSB
+# ENV FDB_NETWORK_OPTION_EXTERNAL_CLIENT_DIRECTORY=/var/dynamic-conf/lib/multiversion/
+# ENV FDB_NETWORK_OPTION_TRACE_ENABLE=/var/log/fdb-trace-logs
+# ENV LD_LIBRARY_PATH=/var/dynamic-conf/lib/
+# ENV BUCKET=""
+# ENTRYPOINT ["run_ycsb.sh"]

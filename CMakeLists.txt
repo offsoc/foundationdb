@@ -23,11 +23,11 @@ if(POLICY CMP0135)
   cmake_policy(SET CMP0135 NEW)
 endif()
 
-project(foundationdb
-  VERSION 7.4.0
-  DESCRIPTION "FoundationDB is a scalable, fault-tolerant, ordered key-value store with full ACID transactions."
-  HOMEPAGE_URL "http://www.foundationdb.org/"
-  LANGUAGES C CXX ASM Swift)
+if(APPLE)
+  project(FoundationDB LANGUAGES C CXX ASM Swift)
+else()
+  project(FoundationDB LANGUAGES C CXX ASM)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
