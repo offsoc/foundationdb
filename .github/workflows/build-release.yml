@@ -20,7 +20,7 @@ jobs:
         elver: [7, 8, 9, 10]
         arch: [x86_64, aarch64]
     env:
-      VERSION: 7.4.0
+      VERSION: 7.4.1
       RELEASE: 1
     steps:
       - uses: actions/checkout@v4
