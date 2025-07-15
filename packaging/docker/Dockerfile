@@ -101,7 +101,7 @@ RUN groupadd --gid 4059 \
     chown -R fdb:fdb /var/fdb
 
 WORKDIR /tmp
-COPY website /tmp/website/
+COPY packaging/docker/website /tmp/website/
 
 # Install FoundationDB Binaries and additional FoundationDB Client Libraries
 RUN if [ "$TARGETARCH" = "amd64" ]; then \
@@ -230,7 +230,7 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
 
 # TODO: Log4J complains that it's eating the HTracer logs.  Even without it, we get per-operation
 # time series graphs of throughput, median, 90, 99, 99.9 and 99.99 (in usec).
-COPY run_ycsb.sh run_ycsb_standalone.sh /usr/local/bin/
+COPY packaging/docker/run_ycsb.sh packaging/docker/run_ycsb_standalone.sh /usr/local/bin/
 RUN mkdir -p /var/log/fdb-trace-logs && \
     chmod +x /usr/local/bin/run_ycsb.sh && \
     chmod +x /usr/local/bin/run_ycsb_standalone.sh
