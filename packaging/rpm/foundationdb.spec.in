@@ -5,13 +5,28 @@ Group: Applications/Databases
 License: Apache Software License 2.0
 URL: https://www.foundationdb.org
 Packager: FoundationDB <fdb-dist@apple.com>
+
+# 支持RHEL9/10的aarch64和x86_64
+%ifarch x86_64 aarch64
+BuildArch: %{_arch}
+%else
 BuildArch: x86_64
+%endif
+
 Summary: Ordered key-value store with full ACID transactions
 Vendor: FoundationDB
 
 %description
 FoundationDB is a scalable, fault-tolerant, ordered key-value store
 with full ACID transactions.
+
+# RHEL9/10依赖区分
+%if 0%{?rhel} == 9
+BuildRequires: openssl-devel >= 1.1
+%endif
+%if 0%{?rhel} == 10
+BuildRequires: openssl-devel >= 3.0
+%endif
 
 %package server
 Summary: FoundationDB server

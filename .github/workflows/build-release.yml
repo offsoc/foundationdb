@@ -1,0 +1,168 @@
+name: Build and Release All Artifacts
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+  # 自动发布到 Release
+  release:
+    types: [published]
+
+jobs:
+  # 1. RPM 构建
+  build-rpm:
+    name: Build RPMs
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        elver: [7, 8, 9, 10]
+        arch: [x86_64, aarch64]
+    env:
+      VERSION: 7.4.0
+      RELEASE: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm m4 dos2unix fakeroot gcc g++ make cmake python3 python3-pip
+      - name: Build FoundationDB binaries
+        run: |
+          mkdir -p build
+          cd build
+          cmake ..
+          make -j$(nproc)
+          cd ..
+      - name: Prepare bin and lib for packaging
+        run: |
+          mkdir -p bin lib
+          cp build/bin/* bin/ || true
+          cp build/lib/* lib/ || true
+          mkdir -p bindings/c/foundationdb
+          cp build/bindings/c/foundationdb/*.h bindings/c/foundationdb/ || true
+      - name: Build RPMs
+        run: |
+          mkdir -p packages
+          ./packaging/rpm/buildrpms.sh ${{ env.VERSION }} ${{ env.RELEASE }} ${{ matrix.elver }} ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm-el${{ matrix.elver }}-${{ matrix.arch }}
+          path: packages/*.rpm
+
+  # 2. DEB 构建
+  build-deb:
+    name: Build DEBs
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        distro: [ubuntu20.04, ubuntu22.04, debian10, debian11]
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev fakeroot dos2unix gcc g++ make cmake python3 python3-pip
+      - name: Build FoundationDB binaries
+        run: |
+          mkdir -p build
+          cd build
+          cmake ..
+          make -j$(nproc)
+          cd ..
+      - name: Prepare bin and lib for packaging
+        run: |
+          mkdir -p bin lib
+          cp build/bin/* bin/ || true
+          cp build/lib/* lib/ || true
+          mkdir -p bindings/c/foundationdb
+          cp build/bindings/c/foundationdb/*.h bindings/c/foundationdb/ || true
+      - name: Build DEBs
+        run: |
+          mkdir -p packages
+          ./packaging/deb/builddebs.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.distro }}-${{ matrix.arch }}
+          path: packages/*.deb
+
+  # 3. Docker 镜像
+  build-docker:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build Docker images
+        run: |
+          docker buildx build --platform linux/${{ matrix.arch }} -t foundationdb/foundationdb:${GITHUB_SHA}-${{ matrix.arch }} --load -f packaging/docker/Dockerfile .
+      - name: Save Docker image as artifact
+        run: |
+          docker save foundationdb/foundationdb:${GITHUB_SHA}-${{ matrix.arch }} | gzip > foundationdb-docker-${{ matrix.arch }}.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docker-${{ matrix.arch }}
+          path: foundationdb-docker-${{ matrix.arch }}.tar.gz
+
+  # 4. macOS PKG 构建
+  build-macos:
+    name: Build macOS PKG
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          brew install cmake
+      - name: Build macOS PKG
+        run: |
+          cd packaging/osx
+          ./buildpkg.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-pkg
+          path: packaging/osx/*.pkg
+
+  # 5. Windows MSI 构建
+  build-windows:
+    name: Build Windows MSI
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          choco install cmake wixtoolset
+      - name: Build MSI
+        run: |
+          cd packaging/msi
+          cmake -G "Visual Studio 17 2022" .
+          msbuild MSIInstaller.wixproj /p:Configuration=Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-msi
+          path: packaging/msi/*.msi
+
+  # 6. 自动发布到 Release
+  release:
+    name: Publish Release Artifacts
+    needs: [build-rpm, build-deb, build-docker, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./artifacts/**/*.{rpm,deb,tar.gz,pkg,msi}

@@ -2,6 +2,8 @@
 
 VERSION=$1
 RELEASE=$2
+ELVER=${3:-9}  # 默认9，可传10
+ARCH=${4:-$(uname -m)}  # 默认当前架构
 
 umask 0022
 
@@ -49,8 +51,8 @@ ln -s ../lib/foundationdb/backup_agent/backup_agent $INSTDIR/usr/bin/dr_agent
 
 (cd $INSTDIR ; tar -czf $TEMPDIR/SOURCES/install-files.tar.gz *)
 
-m4 -DFDBVERSION=$VERSION -DFDBRELEASE=$RELEASE.el9 packaging/rpm/foundationdb.spec.in > $TEMPDIR/SPECS/foundationdb.el9.spec
+m4 -DFDBVERSION=$VERSION -DFDBRELEASE=$RELEASE.el${ELVER} packaging/rpm/foundationdb.spec.in > $TEMPDIR/SPECS/foundationdb.el${ELVER}.${ARCH}.spec
 
-fakeroot rpmbuild --quiet --define "%_topdir $TEMPDIR" -bb $TEMPDIR/SPECS/foundationdb.el9.spec
+fakeroot rpmbuild --target ${ARCH} --quiet --define "%_topdir $TEMPDIR" -bb $TEMPDIR/SPECS/foundationdb.el${ELVER}.${ARCH}.spec
 
-cp $TEMPDIR/RPMS/x86_64/*.rpm packages
+cp $TEMPDIR/RPMS/${ARCH}/*.rpm packages
